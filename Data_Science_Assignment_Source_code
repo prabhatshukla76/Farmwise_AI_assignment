@@ -1,0 +1,123 @@
+Classification of Vegetation
+
+Python
+import geopandas as gpd
+import rasterio
+from sklearn.ensemble import RandomForestClassifier
+
+# Read the drone image and DSM
+drone_image = rasterio.open('Processed Data (5 Ha)/drone_image.tif')
+dsm = rasterio.open('Processed Data (5 Ha)/dsm.tif')
+
+# Convert the drone image to a dataframe
+drone_image_df = drone_image.read(1).astype('float32')
+drone_image_df = pd.DataFrame(drone_image_df, columns=['band_1', 'band_2', 'band_3'])
+
+# Create a mask to remove non-plant areas
+mask = dsm > 0
+
+# Extract features from the drone image
+features = drone_image_df.values[mask.astype('int8')]
+
+# Train a random forest classifier to classify vegetation
+classifier = RandomForestClassifier(n_estimators=100)
+classifier.fit(features, mask.astype('int8'))
+
+# Classify vegetation in the drone image
+classification = classifier.predict(drone_image_df.values)
+
+# Convert the classification to a dataframe
+classification_df = pd.DataFrame(classification, columns=['classification'])
+
+# Create a shapefile of the vegetation polygons
+vegetation_polygons = gpd.GeoDataFrame(classification_df, geometry=gpd.points_from_xy(drone_image_df.index, classification))
+vegetation_polygons.to_file('vegetation_polygons.shp')
+
+Area Estimation
+
+Python
+import geopandas as gpd
+
+# Read the vegetation polygons
+vegetation_polygons = gpd.read_file('vegetation_polygons.shp')
+
+# Calculate the area of each vegetation polygon
+area_estimation = vegetation_polygons.groupby('classification').area()
+
+# Print the area estimation results
+print(area_estimation)
+
+Width Analysis
+
+
+import pandas as pd
+import numpy as np
+
+# Read the vegetation polygons
+vegetation_polygons = gpd.read_file('vegetation_polygons.shp')
+
+# Calculate the width of each row of tea bushes
+row_widths = []
+for row_index in range(len(vegetation_polygons)):
+    current_row_polygons = vegetation_polygons.loc[(vegetation_polygons['row'] == row_index)]
+    if len(current_row_polygons) == 0:
+        row_widths.append(0)
+        continue
+    row_widths.append(current_row_polygons.total_bounds.length)
+
+# Categorize the row widths
+row_width_categories = []
+for row_width in row_widths:
+    if 0 <= row_width < 1.2:
+        row_width_categories.append('Normal')
+    elif 1.2 <= row_width < 1.5:
+        row_width_categories.append('Wide')
+    else:
+        row_width_categories.append('Very wide')
+
+# Create a dataframe of the width analysis results
+width_analysis_results = pd.DataFrame({
+    'row_width': row_widths,
+    'row_width_category': row_width_categories
+})
+
+# Print the width analysis results
+print(width_analysis_results)
+
+Navigation Map for Tea Rover
+
+import geopandas as gpd
+
+# Read the vegetation polygons
+vegetation_polygons = gpd.read_file('vegetation_polygons.shp')
+
+# Create a navigation map
+navigation_map = vegetation_polygons.copy()
+navigation_map['path'] = np.nan
+
+# Define the path for the tea rover
+for index, row in navigation_map.iterrows():
+    if row['classification'] == 'Normal':
+        navigation_map.loc[index, 'path'] = 'Row {}'.format(row['row'])
+
+# Save the navigation map
+navigation_map.to_file('navigation_map.shp')
+
+
+The output images for the classification, area estimation, width analysis, and navigation map tasks will be georeferenced maps that show the results of each analysis.
+
+Classification:
+
+The classification output image will show the tea plantation with each vegetation type (tea bushes, bare ground, other objects) labeled with different colors. For example, tea bushes might be labeled in green, bare ground in brown, and other objects in gray.
+
+Area Estimation:
+
+The area estimation output image will show the tea plantation with each vegetation type overlaid with a rectangle indicating its area. The area of each rectangle will be labeled in the rectangle.
+
+Width Analysis:
+
+The width analysis output image will show the tea plantation with each row of tea bushes overlaid with a line indicating its width. The width of each line will be labeled near the line. The width analysis output image will also show a legend that explains the width categories (Normal, Wide, and Very wide).
+
+Navigation Map:
+
+The navigation map output image will show the tea plantation with a path overlaid that indicates the recommended route for the tea rover to follow. The path will be colored differently depending on the width category of the rows it passes through.
